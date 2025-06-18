@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.class
+*.sqlite3
+*.env
+*.venv
+env/
+venv/
+.DS_Store
+.idea/
+.vscode/
+db.sqlite3
+media/
+staticfiles/
+
+index.html
+tesinng_perplex.py
