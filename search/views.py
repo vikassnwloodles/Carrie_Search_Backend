@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import render
+from .serializers import RegisterSerializer
 
 
 
@@ -18,15 +19,11 @@ def test_ui_view(request):
 
 class RegisterView(APIView):
     def post(self, request):
-        username = request.data.get("username")
-        password = request.data.get("password")
-        email = request.data.get("email")
-
-        if User.objects.filter(username=username).exists():
-            return Response({"error": "Username already exists"}, status=400)
-
-        user = User.objects.create_user(username=username, password=password, email=email)
-        return Response({"message": "User created successfully"}, status=201)
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User created successfully"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
@@ -84,7 +81,7 @@ class SearchView(APIView):
         if not profile or not profile.is_subscribed:
             # Apply search limit for non-subscribed users
             search_count = SearchQuery.objects.filter(user=request.user).count()
-            if search_count >= 10:
+            if search_count >= 30:
                 return Response({"error": "Free search limit reached. Please subscribe."}, status=402)
 
         result = call_perplexity_model(prompt=prompt, image_url=image_url, model=model)
