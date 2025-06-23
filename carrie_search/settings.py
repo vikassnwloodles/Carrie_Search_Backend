@@ -10,13 +10,32 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-# loading the perplexity api
+
+
+
+
+# Email settings for Elastic Email
+
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.elasticemail.com'
+# EMAIL_PORT = 2525
+# EMAIL_USE_TLS = True
+
+# EMAIL_HOST_USER = '5CEA52E9C7856D685A259A02C8921C9555953328169314EA94AC84488320EF6CB26E59913A4D4D5FD190BDE551FAFC3F'
+# EMAIL_HOST_PASSWORD = '5CEA52E9C7856D685A259A02C8921C9555953328169314EA94AC84488320EF6CB26E59913A4D4D5FD190BDE551FAFC3F'
+
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
+
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# loading the perplexity api
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 

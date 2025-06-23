@@ -16,11 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from search.views import stripe_webhook, test_ui_view
+from search.views import stripe_webhook, test_ui_view, VerifyEmailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('search.urls')),
     path("webhook/stripe/", stripe_webhook, name="stripe-webhook"),
     path("", test_ui_view, name="test-ui"),
+    path('verify-email/<uidb64>/<token>/', VerifyEmailView.as_view(), name='verify-email')
 ]

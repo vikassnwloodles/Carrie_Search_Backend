@@ -13,17 +13,116 @@ def test_ui_view(request):
     return render(request, 'index.html')
 
 
-
-# JWT auth area starts
-    
+from django.core.mail import send_mail
+from django.conf import settings
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+from .models import UserProfile
 
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "User created successfully"}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            user = serializer.save()
+
+            # Create UserProfile
+            UserProfile.objects.create(user=user)
+
+            # Send verification email
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            verification_url = request.build_absolute_uri(
+                reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
+            )
+
+            send_mail(
+                subject='Verify your email',
+                message=f'Click to verify: {verification_url}',
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+            )
+
+            return Response({"message": "User created. Check your email to verify."}, status=201)
+
+        return Response(serializer.errors, status=400)
+
+
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import default_token_generator
+
+class VerifyEmailView(APIView):
+    def get(self, request, uidb64, token):
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid)
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({"error": "Invalid verification link"}, status=400)
+
+        if default_token_generator.check_token(user, token):
+            profile = UserProfile.objects.get(user=user)
+            profile.is_verified = True
+            profile.save()
+            return Response({"message": "Email verified successfully!"}, status=200)
+
+        return Response({"error": "Invalid or expired token"}, status=400)
+
+
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+
+class RequestPasswordResetView(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        if not email:
+            return Response({"error": "Email is required"}, status=400)
+
+        try:
+            user = User.objects.get(email=email)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+
+            reset_link = request.build_absolute_uri(
+                reverse('password-reset-confirm', kwargs={'uidb64': uid, 'token': token})
+            )
+
+            send_mail(
+                subject="Reset your password",
+                message=f"Click the link below to reset your password:\n{reset_link}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+
+            return Response({"message": "Password reset link sent to your email"}, status=200)
+
+        except User.DoesNotExist:
+            return Response({"error": "User with this email does not exist"}, status=404)
+
+
+from django.utils.encoding import force_str  # force_text is deprecated
+
+class PasswordResetConfirmView(APIView):
+    def post(self, request, uidb64, token):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+            return Response({"error": "Invalid or expired link"}, status=400)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({"error": "Invalid or expired token"}, status=400)
+
+        new_password = request.data.get("new_password")
+        if not new_password:
+            return Response({"error": "New password is required"}, status=400)
+
+        user.set_password(new_password)
+        user.save()
+        return Response({"message": "Password has been reset successfully"}, status=200)
 
 
 
@@ -34,11 +133,16 @@ class LoginView(APIView):
         user = authenticate(username=username, password=password)
 
         if user is not None:
+            profile = UserProfile.objects.filter(user=user).first()
+            if not profile or not profile.is_verified:
+                return Response({"error": "Email not verified"}, status=403)
+
             refresh = RefreshToken.for_user(user)
             return Response({
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
             })
+
         return Response({"error": "Invalid credentials"}, status=401)
 
 
@@ -47,7 +151,7 @@ class LogoutView(APIView):
         try:
             refresh_token = request.data["refresh"]
             token = RefreshToken(refresh_token)
-            token.blacklist()  # if using token blacklisting
+            token.blacklist()  
             return Response(status=205)
         except Exception as e:
             return Response(status=400)
@@ -93,28 +197,6 @@ class SearchView(APIView):
         )
 
         return Response(result) 
-
-    # def post(self, request):
-    #     prompt = request.data.get("prompt")
-    #     image_url = request.data.get("image_url")
-    #     model = request.data.get("model", "sonar-pro")
-
-    #     if not prompt and not image_url:
-    #         return Response({"error": "Prompt or image is required."}, status=400)
-
-    #     search_count = SearchQuery.objects.filter(user=request.user).count()
-    #     if search_count >= 2:
-    #         return Response({"error": "Free search limit reached. Please subscribe."}, status=402)
-
-    #     result = call_perplexity_model(prompt=prompt, image_url=image_url, model=model)
-
-    #     SearchQuery.objects.create(
-    #         user=request.user,
-    #         prompt=prompt or "[Image]",
-    #         response=result
-    #     )
-
-    #     return Response(result)
 
 
 
@@ -179,38 +261,6 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
 
 
-# @csrf_exempt
-# def stripe_webhook(request):
-#     payload = request.body
-#     sig_header = request.META['HTTP_STRIPE_SIGNATURE']
-#     event = None
-
-#     try:
-#         event = stripe.Webhook.construct_event(
-#             payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-#         )
-#     except ValueError as e:
-#         return HttpResponse(status=400)
-#     except stripe.error.SignatureVerificationError as e:
-#         return HttpResponse(status=400)
-
-#     if event['type'] == 'checkout.session.completed':
-#         session = event['data']['object']
-#         customer_email = session.get("customer_email")
-
-#         try:
-#             user = User.objects.get(email=customer_email)
-#             profile, created = UserProfile.objects.get_or_create(user=user)
-#             profile.is_subscribed = True
-#             profile.save()
-
-#             print(f"✅ Subscription activated for {user.username}")
-#         except User.DoesNotExist:
-#             print("❌ No user found with that email.")
-#         except Exception as e:
-#             print(f"🔥 Error updating user subscription: {str(e)}")
-
-#     return HttpResponse(status=200)
 
 @csrf_exempt
 def stripe_webhook(request):
@@ -260,35 +310,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 class StripeSessionStatusView(APIView):
-    # def get(self, request):
-    #     session_id = request.GET.get('session_id')
-    #     if not session_id:
-    #         return Response({"error": "Missing session_id"}, status=400)
 
-    #     try:
-    #         session = stripe.checkout.Session.retrieve(session_id)
-    #         customer_email = session.get("customer_email")
-    #         subscription_id = session.get("subscription")
-    #         stripe_subscription_status = None
-
-    #         if subscription_id:
-    #             subscription = stripe.Subscription.retrieve(subscription_id)
-    #             stripe_subscription_status = subscription.status
-
-    #         user = User.objects.filter(email=customer_email).first()
-    #         is_subscribed = False
-    #         if user:
-    #             profile = UserProfile.objects.filter(user=user).first()
-    #             if profile:
-    #                 is_subscribed = profile.is_subscribed
-
-    #         return Response({
-    #             "customer_email": customer_email,
-    #             "subscription_status": stripe_subscription_status,
-    #             "app_is_subscribed": is_subscribed
-    #         })
-    #     except Exception as e:
-    #         return Response({"error": str(e)}, status=400)
     def get(self, request):
         session_id = request.GET.get('session_id')
         if not session_id:
