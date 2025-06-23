@@ -13,23 +13,6 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 
 
-
-# Email settings for Elastic Email
-
-
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.elasticemail.com'
-# EMAIL_PORT = 2525
-# EMAIL_USE_TLS = True
-
-# EMAIL_HOST_USER = '5CEA52E9C7856D685A259A02C8921C9555953328169314EA94AC84488320EF6CB26E59913A4D4D5FD190BDE551FAFC3F'
-# EMAIL_HOST_PASSWORD = '5CEA52E9C7856D685A259A02C8921C9555953328169314EA94AC84488320EF6CB26E59913A4D4D5FD190BDE551FAFC3F'
-
-# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-
-
-
 import os
 from dotenv import load_dotenv
 
@@ -38,11 +21,23 @@ load_dotenv()
 # loading the perplexity api
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
+# Email settings for Elastic Email
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = os.getenv("EMAIL_PORT")
+EMAIL_USE_TLS = True
+
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-HOST=os.getenv("HOST")
+ALLOWED_HOSTS=[host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",")]
 
 
 from datetime import timedelta
@@ -62,7 +57,7 @@ SECRET_KEY = 'django-insecure-(a$!#0**0%-qyodz!fsk+enyzt&0@m8!6%gfs_x__q58_a!2#c
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [HOST, '127.0.0.1']
+ALLOWED_HOSTS = ALLOWED_HOSTS
 
 
 # Application definition
