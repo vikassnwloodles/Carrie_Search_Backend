@@ -1,4 +1,4 @@
-from rest_framework import status
+import os
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
@@ -6,20 +6,35 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import render
 from .serializers import RegisterSerializer
-
-
-
-def test_ui_view(request):
-    return render(request, 'index.html')
-
-
-from django.core.mail import send_mail
-from django.conf import settings
-from django.utils.http import urlsafe_base64_encode
+from django.shortcuts import redirect
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.urls import reverse
+from django.core.mail import send_mail
+from django.conf import settings
 from .models import UserProfile
+from django.utils.encoding import force_str  # force_text is deprecated
+from rest_framework.permissions import IsAuthenticated
+from .services.perplexity import call_perplexity_model
+from rest_framework.generics import ListAPIView
+from .models import SearchQuery
+from .serializers import SearchQuerySerializer
+import stripe
+from rest_framework.parsers import MultiPartParser
+from PyPDF2 import PdfReader
+from docx import Document
+from .utils import image_to_data_uri
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse
+
+
+FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
+
+
+def test_ui_view(request):
+    return render(request, "index.html")
+
 
 class RegisterView(APIView):
     def post(self, request):
@@ -30,27 +45,28 @@ class RegisterView(APIView):
             # Create UserProfile
             UserProfile.objects.create(user=user)
 
-            # Send verification email
+            # Send verification email with frontend redirect link
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
-            verification_url = request.build_absolute_uri(
-                reverse('verify-email', kwargs={'uidb64': uid, 'token': token})
-            )
+
+            # FRONTEND VERIFICATION LINK
+            # Replace with your actual frontend domain
+            frontend_base_url = f"https://{FRONTEND_DOMAIN}/verify-email"
+            verification_url = f"{frontend_base_url}/{uid}/{token}/"
 
             send_mail(
-                subject='Verify your email',
-                message=f'Click to verify: {verification_url}',
+                subject="Verify your email",
+                message=f"Click to verify your email: {verification_url}",
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user.email],
             )
 
-            return Response({"message": "User created. Check your email to verify."}, status=201)
+            return Response(
+                {"message": "User created. Check your email to verify."}, status=201
+            )
 
         return Response(serializer.errors, status=400)
 
-
-from django.utils.http import urlsafe_base64_decode
-from django.contrib.auth.tokens import default_token_generator
 
 class VerifyEmailView(APIView):
     def get(self, request, uidb64, token):
@@ -58,21 +74,20 @@ class VerifyEmailView(APIView):
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
         except (User.DoesNotExist, ValueError, TypeError, OverflowError):
-            return Response({"error": "Invalid verification link"}, status=400)
+            return redirect(
+                f"https://{FRONTEND_DOMAIN}/verify-email-result?status=invalid"
+            )
 
         if default_token_generator.check_token(user, token):
             profile = UserProfile.objects.get(user=user)
             profile.is_verified = True
             profile.save()
-            return Response({"message": "Email verified successfully!"}, status=200)
+            return redirect(
+                f"https://{FRONTEND_DOMAIN}/verify-email-result?status=success"
+            )
 
-        return Response({"error": "Invalid or expired token"}, status=400)
+        return redirect(f"https://{FRONTEND_DOMAIN}/verify-email-result?status=expired")
 
-
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import default_token_generator
-from django.urls import reverse
 
 class RequestPasswordResetView(APIView):
     def post(self, request):
@@ -86,7 +101,9 @@ class RequestPasswordResetView(APIView):
             token = default_token_generator.make_token(user)
 
             reset_link = request.build_absolute_uri(
-                reverse('password-reset-confirm', kwargs={'uidb64': uid, 'token': token})
+                reverse(
+                    "password-reset-confirm", kwargs={"uidb64": uid, "token": token}
+                )
             )
 
             send_mail(
@@ -97,13 +114,15 @@ class RequestPasswordResetView(APIView):
                 fail_silently=False,
             )
 
-            return Response({"message": "Password reset link sent to your email"}, status=200)
+            return Response(
+                {"message": "Password reset link sent to your email"}, status=200
+            )
 
         except User.DoesNotExist:
-            return Response({"error": "User with this email does not exist"}, status=404)
+            return Response(
+                {"error": "User with this email does not exist"}, status=404
+            )
 
-
-from django.utils.encoding import force_str  # force_text is deprecated
 
 class PasswordResetConfirmView(APIView):
     def post(self, request, uidb64, token):
@@ -125,7 +144,6 @@ class PasswordResetConfirmView(APIView):
         return Response({"message": "Password has been reset successfully"}, status=200)
 
 
-
 class LoginView(APIView):
     def post(self, request):
         username = request.data.get("username")
@@ -138,10 +156,12 @@ class LoginView(APIView):
                 return Response({"error": "Email not verified"}, status=403)
 
             refresh = RefreshToken.for_user(user)
-            return Response({
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-            })
+            return Response(
+                {
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                }
+            )
 
         return Response({"error": "Invalid credentials"}, status=401)
 
@@ -151,23 +171,15 @@ class LogoutView(APIView):
         try:
             refresh_token = request.data["refresh"]
             token = RefreshToken(refresh_token)
-            token.blacklist()  
+            token.blacklist()
             return Response(status=205)
         except Exception as e:
             return Response(status=400)
 
 
-
-
 # storing the promtpt & response & counting the number of prompts<25
 # perplexity's part starts here
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from .services.perplexity import call_perplexity_model
-from rest_framework import status
-from .models import SearchQuery, UserProfile
 
 class SearchView(APIView):
     permission_classes = [IsAuthenticated]
@@ -186,44 +198,37 @@ class SearchView(APIView):
             # Apply search limit for non-subscribed users
             search_count = SearchQuery.objects.filter(user=request.user).count()
             if search_count >= 30:
-                return Response({"error": "Free search limit reached. Please subscribe."}, status=402)
+                return Response(
+                    {"error": "Free search limit reached. Please subscribe."},
+                    status=402,
+                )
 
         result = call_perplexity_model(prompt=prompt, image_url=image_url, model=model)
 
         SearchQuery.objects.create(
-            user=request.user,
-            prompt=prompt or "[Image]",
-            response=result
+            user=request.user, prompt=prompt or "[Image]", response=result
         )
 
-        return Response(result) 
-
+        return Response(result)
 
 
 # library functionality
-from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAuthenticated
-from .models import SearchQuery
-from .serializers import SearchQuerySerializer
+
 
 class LibraryView(ListAPIView):
     serializer_class = SearchQuerySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return SearchQuery.objects.filter(user=self.request.user).order_by('-created_at')
-
+        return SearchQuery.objects.filter(user=self.request.user).order_by(
+            "-created_at"
+        )
 
 
 # pricing views
 
-import stripe
-from django.conf import settings
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
 
 class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
@@ -231,35 +236,27 @@ class CreateCheckoutSessionView(APIView):
     def post(self, request):
         try:
             checkout_session = stripe.checkout.Session.create(
-                payment_method_types=['card'],
-                mode='subscription',
-                line_items=[{
-                    'price': settings.STRIPE_PRICE_ID,
-                    'quantity': 1,
-                }],
+                payment_method_types=["card"],
+                mode="subscription",
+                line_items=[
+                    {
+                        "price": settings.STRIPE_PRICE_ID,
+                        "quantity": 1,
+                    }
+                ],
                 customer_email=request.user.email,
                 # customer_email="testuser@example.com",
-                success_url='http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}',
-                cancel_url='http://localhost:3000/cancelled',
+                success_url="http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="http://localhost:3000/cancelled",
             )
 
-
-            return Response({'checkout_url': checkout_session.url})
+            return Response({"checkout_url": checkout_session.url})
         except Exception as e:
-            return Response({'error': str(e)}, status=400)
+            return Response({"error": str(e)}, status=400)
 
-
-
-import stripe
-import json
-import os
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse, JsonResponse
-from django.conf import settings
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
 
 
 @csrf_exempt
@@ -267,7 +264,7 @@ def stripe_webhook(request):
     print("🔔 Stripe webhook hit")
 
     payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
 
     if sig_header is None:
         print("❌ No Stripe signature header.")
@@ -286,8 +283,8 @@ def stripe_webhook(request):
 
     print(f"✅ Event type: {event['type']}")
 
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
         customer_email = session.get("customer_email")
         print(f"✅ Checkout session completed for {customer_email}")
 
@@ -305,14 +302,10 @@ def stripe_webhook(request):
     return HttpResponse(status=200)
 
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-
 class StripeSessionStatusView(APIView):
 
     def get(self, request):
-        session_id = request.GET.get('session_id')
+        session_id = request.GET.get("session_id")
         if not session_id:
             return Response({"error": "Missing session_id"}, status=400)
 
@@ -327,18 +320,27 @@ class StripeSessionStatusView(APIView):
                 stripe_subscription_status = subscription.status
 
                 # Update subscription status if session is completed
-                if session.get("status") == "complete" and stripe_subscription_status in ["active", "trialing"]:
+                if session.get(
+                    "status"
+                ) == "complete" and stripe_subscription_status in [
+                    "active",
+                    "trialing",
+                ]:
                     try:
                         user = User.objects.get(email=customer_email)
                         profile, created = UserProfile.objects.get_or_create(user=user)
                         if not profile.is_subscribed:
                             profile.is_subscribed = True
                             profile.save()
-                            print(f"✅ Subscription activated for {user.username} (email: {customer_email})")
+                            print(
+                                f"✅ Subscription activated for {user.username} (email: {customer_email})"
+                            )
                     except User.DoesNotExist:
                         print(f"❌ No user found with email: {customer_email}")
                     except Exception as e:
-                        print(f"🔥 Error updating subscription for {customer_email}: {str(e)}")
+                        print(
+                            f"🔥 Error updating subscription for {customer_email}: {str(e)}"
+                        )
 
             user = User.objects.filter(email=customer_email).first()
             is_subscribed = False
@@ -353,27 +355,23 @@ class StripeSessionStatusView(APIView):
 
             print(f"App subscription status for {customer_email}: {is_subscribed}")
 
-            return Response({
-                "customer_email": customer_email,
-                "subscription_status": stripe_subscription_status,
-                "app_is_subscribed": is_subscribed
-            })
+            return Response(
+                {
+                    "customer_email": customer_email,
+                    "subscription_status": stripe_subscription_status,
+                    "app_is_subscribed": is_subscribed,
+                }
+            )
         except Exception as e:
             print(f"🔥 Error in StripeSessionStatusView: {str(e)}")
             return Response({"error": str(e)}, status=400)
 
 
-
-
-from rest_framework.parsers import MultiPartParser
-
-from .utils import image_to_data_uri  
-
 class UploadImageView(APIView):
     parser_classes = [MultiPartParser]
 
     def post(self, request):
-        image = request.FILES.get('image')
+        image = request.FILES.get("image")
         if not image:
             return Response({"error": "No image uploaded"}, status=400)
 
@@ -382,17 +380,7 @@ class UploadImageView(APIView):
             return Response({"image_url": data_uri}, status=200)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-        
 
-
-
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser
-from PyPDF2 import PdfReader
-from docx import Document
-import mimetypes
 
 class UploadDocExtractView(APIView):
     parser_classes = [MultiPartParser]
@@ -414,7 +402,9 @@ class UploadDocExtractView(APIView):
 
         elif file.name.endswith(".pdf"):
             reader = PdfReader(file)
-            text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+            text = "\n".join(
+                [page.extract_text() for page in reader.pages if page.extract_text()]
+            )
             return text.strip()
 
         elif file.name.endswith(".docx"):
@@ -422,4 +412,6 @@ class UploadDocExtractView(APIView):
             return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
         else:
-            raise ValueError("Unsupported file format. Please upload a .txt, .pdf, or .docx file.")
+            raise ValueError(
+                "Unsupported file format. Please upload a .txt, .pdf, or .docx file."
+            )
