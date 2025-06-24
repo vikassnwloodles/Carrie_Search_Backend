@@ -42,8 +42,8 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
 
-            # Create UserProfile
-            UserProfile.objects.create(user=user)
+            # # Create UserProfile
+            # UserProfile.objects.create(user=user)
 
             # Send verification email with frontend redirect link
             uid = urlsafe_base64_encode(force_bytes(user.pk))
