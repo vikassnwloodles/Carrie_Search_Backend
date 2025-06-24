@@ -152,8 +152,8 @@ class LoginView(APIView):
 
         if user is not None:
             profile = UserProfile.objects.filter(user=user).first()
-            if not profile or not profile.is_verified:
-                return Response({"error": "Email not verified"}, status=403)
+            # if not profile or not profile.is_verified:
+            #     return Response({"error": "Email not verified"}, status=403)
 
             refresh = RefreshToken.for_user(user)
             return Response(
@@ -222,7 +222,7 @@ class LibraryView(ListAPIView):
     def get_queryset(self):
         return SearchQuery.objects.filter(user=self.request.user).order_by(
             "-created_at"
-        )
+        )[:10]
 
 
 # pricing views
