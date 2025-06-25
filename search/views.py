@@ -18,7 +18,7 @@ from django.utils.encoding import force_str  # force_text is deprecated
 from rest_framework.permissions import IsAuthenticated
 from .services.perplexity import call_perplexity_model
 from rest_framework.generics import ListAPIView
-from .models import SearchQuery
+from .models import SearchQuery, UserStripeSession
 from .serializers import SearchQuerySerializer
 import stripe
 from rest_framework.parsers import MultiPartParser
@@ -246,9 +246,13 @@ class CreateCheckoutSessionView(APIView):
                 ],
                 customer_email=request.user.email,
                 # customer_email="testuser@example.com",
-                success_url="https://"+os.getenv("FRONTEND_DOMAIN")+"/?success=true&session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="https://"+os.getenv("FRONTEND_DOMAIN")+"/?success=false",
+                success_url="https://"+os.getenv("FRONTEND_DOMAIN")+"?success=true&session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="https://"+os.getenv("FRONTEND_DOMAIN")+"?success=false",
             )
+
+            user_stripe_session = UserStripeSession(user=request.user, 
+                              checkout_session_id=checkout_session.id)
+            user_stripe_session.save()
 
             return Response({"checkout_url": checkout_session.url})
         except Exception as e:
