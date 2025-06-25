@@ -30,6 +30,7 @@ from django.http import HttpResponse
 
 
 FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL")
 
 
 def test_ui_view(request):
@@ -49,8 +50,7 @@ class RegisterView(APIView):
             is_user_verified = userprofile.is_verified
             print(f"{is_user_verified=}")
         if serializer.is_valid() or not is_user_verified:
-            if not user_already_exists:
-                user = serializer.save()
+            user = serializer.save()
 
             # # Create UserProfile
             # UserProfile.objects.create(user=user)
@@ -61,8 +61,8 @@ class RegisterView(APIView):
 
             # FRONTEND VERIFICATION LINK
             # Replace with your actual frontend domain
-            frontend_base_url = f"https://{FRONTEND_DOMAIN}/verify-email"
-            verification_url = f"{frontend_base_url}/{uid}/{token}/"
+            backend_base_url = f"{BACKEND_BASE_URL}/verify-email"
+            verification_url = f"{backend_base_url}/{uid}/{token}/"
 
             send_mail(
                 subject="Verify your email",
@@ -162,8 +162,8 @@ class LoginView(APIView):
 
         if user is not None:
             profile = UserProfile.objects.filter(user=user).first()
-            # if not profile or not profile.is_verified:
-            #     return Response({"error": "Email not verified"}, status=403)
+            if not profile or not profile.is_verified:
+                return Response({"error": "Email not verified"}, status=403)
 
             refresh = RefreshToken.for_user(user)
             return Response(

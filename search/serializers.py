@@ -14,12 +14,17 @@ class SearchQuerySerializer(serializers.ModelSerializer):
 
 
 
+from django.contrib.auth.models import User
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True)
 
-    # Extended fields (profile)
+    # Extended profile fields
     first_name = serializers.CharField(required=False, allow_blank=True)
     last_name = serializers.CharField(required=False, allow_blank=True)
     date_of_birth = serializers.DateField(required=False)
@@ -46,34 +51,55 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError(e.messages)
         return value
 
-    def validate_username(self, value):
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Username already exists")
-        return value
-
-    # def create(self, validated_data):
-    #     filter_validated_data = dict()
-    #     filter_validated_data["username"] = validated_data["username"]
-    #     filter_validated_data["email"] = validated_data["email"]
-    #     filter_validated_data["password"] = validated_data["password"]
-    #     return User.objects.create_user(**filter_validated_data)
-
     def create(self, validated_data):
-        # Separate user and profile data
+        # Extract and remove password safely
+        password = validated_data.pop("password")
+
+        # Extract user-related fields
+        username = validated_data.get("username")
+        email = validated_data.get("email")
+
         user_fields = {
-            "username": validated_data["username"],
-            "email": validated_data["email"],
-            "password": validated_data.pop("password"),
+            "username": username,
+            "email": email,
         }
 
         profile_fields = validated_data.copy()
 
-        user = User.objects.create_user(**user_fields)
+        # Create or update user (excluding password in defaults)
+        user, created = User.objects.update_or_create(
+            username=username,
+            defaults=user_fields
+        )
+
+        # Always set password securely
+        user.set_password(password)
+        user.save()
 
         # Update profile fields
-        profile = user.userprofile
+        profile = user.userprofile  # Assumes OneToOneField from UserProfile to User
         for key, value in profile_fields.items():
             setattr(profile, key, value)
         profile.save()
 
         return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+
+        # Update core user fields
+        instance.email = validated_data.get("email", instance.email)
+        instance.save()
+
+        # Update password if provided
+        if password:
+            instance.set_password(password)
+            instance.save()
+
+        # Update profile fields
+        profile = instance.userprofile
+        for key, value in validated_data.items():
+            setattr(profile, key, value)
+        profile.save()
+
+        return instance
