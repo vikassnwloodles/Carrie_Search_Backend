@@ -75,7 +75,7 @@ class VerifyEmailView(APIView):
             user = User.objects.get(pk=uid)
         except (User.DoesNotExist, ValueError, TypeError, OverflowError):
             return redirect(
-                f"https://{FRONTEND_DOMAIN}/verify-email-result?status=invalid"
+                f"https://{FRONTEND_DOMAIN}/?status=invalid"
             )
 
         if default_token_generator.check_token(user, token):
@@ -83,10 +83,10 @@ class VerifyEmailView(APIView):
             profile.is_verified = True
             profile.save()
             return redirect(
-                f"https://{FRONTEND_DOMAIN}/verify-email-result?status=success"
+                f"https://{FRONTEND_DOMAIN}/?status=success"
             )
 
-        return redirect(f"https://{FRONTEND_DOMAIN}/verify-email-result?status=expired")
+        return redirect(f"https://{FRONTEND_DOMAIN}/?status=expired")
 
 
 class RequestPasswordResetView(APIView):
@@ -197,7 +197,7 @@ class SearchView(APIView):
         if not profile or not profile.is_subscribed:
             # Apply search limit for non-subscribed users
             search_count = SearchQuery.objects.filter(user=request.user).count()
-            if search_count >= 30:
+            if search_count >= int(os.getenv("FREE_SEARCH_LIMIT", 10)):
                 return Response(
                     {"error": "Free search limit reached. Please subscribe."},
                     status=402,
@@ -246,8 +246,8 @@ class CreateCheckoutSessionView(APIView):
                 ],
                 customer_email=request.user.email,
                 # customer_email="testuser@example.com",
-                success_url="http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="http://localhost:3000/cancelled",
+                success_url="https://"+os.getenv("FRONTEND_DOMAIN")+"/?success=true&session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="https://"+os.getenv("FRONTEND_DOMAIN")+"/?success=false",
             )
 
             return Response({"checkout_url": checkout_session.url})
