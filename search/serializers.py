@@ -44,6 +44,16 @@ class RegisterSerializer(serializers.Serializer):
     agreed_to_terms = serializers.BooleanField(required=False)
     consent_to_communications = serializers.BooleanField(required=False)
 
+    def validate_username(self, value):
+        try:
+            user = User.objects.get(username=value)
+            # Check UserProfile and its isactive field
+            if hasattr(user, 'userprofile') and user.userprofile.is_verified:
+                raise serializers.ValidationError("This username is already taken.")
+        except User.DoesNotExist:
+            pass  # Username does not exist, so it's fine
+        return value
+
     def validate_password(self, value):
         try:
             validate_password(value)

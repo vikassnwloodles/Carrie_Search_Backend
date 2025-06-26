@@ -40,16 +40,8 @@ def test_ui_view(request):
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
-        username = request.data["username"]
-        user_already_exists = User.objects.filter(username=username).exists()
-        is_user_verified = False
-        print(f"{user_already_exists=}")
-        if user_already_exists:
-            user = User.objects.get(username=username)
-            userprofile = user.userprofile
-            is_user_verified = userprofile.is_verified
-            print(f"{is_user_verified=}")
-        if serializer.is_valid() or not is_user_verified:
+
+        if serializer.is_valid():
             user = serializer.save()
 
             # # Create UserProfile
