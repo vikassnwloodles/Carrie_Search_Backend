@@ -189,6 +189,8 @@ class LogoutView(APIView):
 
 # storing the promtpt & response & counting the number of prompts<25
 # perplexity's part starts here
+def get_best_model(model):
+    return "sonar-pro" if model == "best" else model
 
 
 class SearchView(APIView):
@@ -198,7 +200,9 @@ class SearchView(APIView):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
         model = request.data.get("model", "sonar-pro")
-
+        
+        model = get_best_model(model)
+        
         if not prompt and not image_url:
             return Response({"error": "Prompt or image is required."}, status=400)
 
