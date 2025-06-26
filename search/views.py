@@ -76,17 +76,13 @@ class VerifyEmailView(APIView):
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
         except (User.DoesNotExist, ValueError, TypeError, OverflowError):
-            return redirect(
-                f"https://{FRONTEND_DOMAIN}/?status=invalid"
-            )
+            return redirect(f"https://{FRONTEND_DOMAIN}/?status=invalid")
 
         if default_token_generator.check_token(user, token):
             profile = UserProfile.objects.get(user=user)
             profile.is_verified = True
             profile.save()
-            return redirect(
-                f"https://{FRONTEND_DOMAIN}/?status=success"
-            )
+            return redirect(f"https://{FRONTEND_DOMAIN}/?status=success")
 
         return redirect(f"https://{FRONTEND_DOMAIN}/?status=expired")
 
@@ -192,9 +188,14 @@ class SearchView(APIView):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
         model = request.data.get("model", "sonar-pro")
-        
+        return_images = request.data.get("return_images", False)
+        search_mode = request.data.get("search_mode", "web")
+        deep_research = request.data.get("deep_research", False)
+        pro = request.data.get("pro", True)
+        labs = request.data.get("labs", False)
+
         model = get_best_model(model)
-        
+
         if not prompt and not image_url:
             return Response({"error": "Prompt or image is required."}, status=400)
 
@@ -209,7 +210,14 @@ class SearchView(APIView):
                     status=402,
                 )
 
-        result = call_perplexity_model(prompt=prompt, image_url=image_url, model=model)
+        result = call_perplexity_model(
+            prompt=prompt,
+            image_url=image_url,
+            model=model,
+            return_images=return_images,
+            search_mode=search_mode,
+            deep_research=deep_research,
+        )
 
         SearchQuery.objects.create(
             user=request.user, prompt=prompt or "[Image]", response=result
@@ -252,12 +260,15 @@ class CreateCheckoutSessionView(APIView):
                 ],
                 customer_email=request.user.email,
                 # customer_email="testuser@example.com",
-                success_url="https://"+os.getenv("FRONTEND_DOMAIN")+"?success=true&session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="https://"+os.getenv("FRONTEND_DOMAIN")+"?success=false",
+                success_url="https://"
+                + os.getenv("FRONTEND_DOMAIN")
+                + "?success=true&session_id={CHECKOUT_SESSION_ID}",
+                cancel_url="https://" + os.getenv("FRONTEND_DOMAIN") + "?success=false",
             )
 
-            user_stripe_session = UserStripeSession(user=request.user, 
-                              checkout_session_id=checkout_session.id)
+            user_stripe_session = UserStripeSession(
+                user=request.user, checkout_session_id=checkout_session.id
+            )
             user_stripe_session.save()
 
             return Response({"checkout_url": checkout_session.url})
