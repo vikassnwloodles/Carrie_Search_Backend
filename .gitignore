@@ -12,7 +12,7 @@ venv/
 .vscode/
 db.sqlite3
 media/
-staticfiles/
+# staticfiles/
 
 index.html
 tesinng_perplex.py

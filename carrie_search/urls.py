@@ -15,6 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import path, include
 from search.views import stripe_webhook, test_ui_view, VerifyEmailView
 
@@ -25,3 +27,7 @@ urlpatterns = [
     path("", test_ui_view, name="test-ui"),
     path('verify-email/<uidb64>/<token>/', VerifyEmailView.as_view(), name='verify-email')
 ]
+
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

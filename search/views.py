@@ -24,7 +24,7 @@ import stripe
 from rest_framework.parsers import MultiPartParser
 from PyPDF2 import PdfReader
 from docx import Document
-from .utils import image_to_data_uri
+from .utils import image_to_data_uri, send_verification_email
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 
@@ -56,12 +56,13 @@ class RegisterView(APIView):
             backend_base_url = f"{BACKEND_BASE_URL}/verify-email"
             verification_url = f"{backend_base_url}/{uid}/{token}/"
 
-            send_mail(
-                subject="Verify your email",
-                message=f"Click to verify your email: {verification_url}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-            )
+            # send_mail(
+            #     subject="Verify your email",
+            #     message=f"Click to verify your email: {verification_url}",
+            #     from_email=settings.DEFAULT_FROM_EMAIL,
+            #     recipient_list=[user.email],
+            # )
+            send_verification_email(request, user, verification_url)
 
             return Response(
                 {"message": "User created. Check your email to verify."}, status=201

@@ -30,22 +30,23 @@ DB_PORT=os.getenv("DB_PORT")
 # loading the perplexity api
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
-# Email settings for Elastic Email
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
+# EMAIL CONFIG
 if ENV == "dev":
     EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
     EMAIL_HOST = os.getenv("EMAIL_HOST")
     EMAIL_PORT = os.getenv("EMAIL_PORT")
-    EMAIL_HOST_USER = DEFAULT_FROM_EMAIL
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
     EMAIL_USE_TLS = True
 else:
     EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
     EMAIL_HOST = os.getenv("EMAIL_HOST")
     EMAIL_PORT = os.getenv("EMAIL_PORT")
-    EMAIL_HOST_USER = DEFAULT_FROM_EMAIL
+    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
     EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
     EMAIL_USE_TLS = True
 
 
@@ -107,9 +108,7 @@ ROOT_URLCONF = 'carrie_search.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-          'DIRS': [
-            BASE_DIR,
-        ],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -187,8 +186,13 @@ STATIC_URL = '/static/'
 # For production:
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
-# # For local development, you may also want:
-# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'staticfiles')]
+# For local development, you may also want:
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'staticfiles')]
+
+
+# MEDIA CONFIG
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
 # Default primary key field type
