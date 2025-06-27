@@ -16,7 +16,6 @@ def image_to_data_uri(image_file: UploadedFile) -> str:
 
 
 def send_verification_email(request, user, verification_link):
-    banner_url = request.build_absolute_uri('/static/email/carrie.png')
     subject = "Verify your email"
     from_email = settings.DEFAULT_FROM_EMAIL
     to_email = user.email
@@ -24,7 +23,6 @@ def send_verification_email(request, user, verification_link):
     context = {
         "user": user,
         "verification_link": verification_link,
-        "banner_url": banner_url
     }
 
     text_content = f"Hi {user.username}, please verify your email: {verification_link}"

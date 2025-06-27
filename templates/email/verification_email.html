@@ -1,12 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Verify Your Email</title>
+  <title>Carrie Logo</title>
+  <style>
+    .container {
+      display: flex;
+      justify-content: center;  /* ✅ center horizontally */
+      align-items: center; /* optional: vertically align */
+      gap: 30px; /* optional: spacing between divs */
+    }
+    .carrie-logo {
+      font-family: 'Arial', sans-serif;
+      font-size: 64px;
+      font-weight: bold;
+      letter-spacing: -9px;
+    }
+    .c { color: #6A1B9A; }   /* Purple */
+    .a { color: #F39C12; }   /* Orange */
+    .r1 { color: #AEDC36; }  /* Light Green */
+    .r2 { color: #6A1B9A; }  /* Purple */
+    .i { color: #F39C12; }   /* Orange */
+    .e { color: #AEDC36; }   /* Light Green */
+  </style>
 </head>
 <body style="font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px;">
   <div style="max-width: 600px; margin: auto; background: #fff; padding: 30px; border-radius: 8px;">
-    <img src="{{ banner_url }}" style="width: 100%; max-width: 600px; border-radius: 6px;">
+    <center class="container">
+      <div class="carrie-logo">
+        <span class="c">C</span>
+        <span class="a">a</span>
+        <span class="r1">r</span>
+        <span class="r2">r</span>
+        <span class="i">i</span>
+        <span class="e">e</span>
+      </div>
+      <div class="carrie-logo">
+        <span class="c">S</span>
+        <span class="a">e</span>
+        <span class="r1">a</span>
+        <span class="r2">r</span>
+        <span class="i">c</span>
+        <span class="e">h</span>
+      </div>
+    </center>
+    <br><br>
     <h2 style="color: #333;">Welcome, {{ user.username }}!</h2>
     <p>Thank you for signing up. Please verify your email by clicking the button below:</p>
     <p style="text-align: center; margin: 30px 0;">
