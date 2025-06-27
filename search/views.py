@@ -244,12 +244,56 @@ class LibraryView(ListAPIView):
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+def check_subscription(user):
+    try:
+        user_stripe = UserStripeSession.objects.get(user=user)
+        customer_id = user_stripe.stripe_customer_id
+
+        # Fetch subscriptions
+        subscriptions = stripe.Subscription.list(customer=customer_id, status='all', limit=1)
+
+        if subscriptions.data:
+            subscription = subscriptions.data[0]
+            is_active = subscription.status in ['active', 'trialing']
+            return is_active
+        else:
+            return False
+    except UserStripeSession.DoesNotExist:
+        return False
+
+
 class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
+            user = request.user
+
+            # Fix for multiple UserStripeSession rows per user
+            existing_session = UserStripeSession.objects.filter(user=user).first()
+
+            # [TODO] ALREADY SUBSCRIBED
+            is_active = check_subscription(user)
+            if is_active:
+                return Response({"subscription_status": "active", "checkout_url": None})
+
+            if not existing_session:
+                # Create a new Stripe customer and session entry
+                customer = stripe.Customer.create(email=user.email)
+                user_stripe_session = UserStripeSession.objects.create(
+                    user=user,
+                    checkout_session_id="",  # will update after session creation
+                )
+                user_stripe_session.stripe_customer_id = customer.id
+                user_stripe_session.save()
+            else:
+                # Retrieve customer using existing stripe_customer_id
+                customer = stripe.Customer.retrieve(existing_session.stripe_customer_id)
+                user_stripe_session = existing_session
+
+
             checkout_session = stripe.checkout.Session.create(
+                customer=customer.id,
                 payment_method_types=["card"],
                 mode="subscription",
                 line_items=[
@@ -258,7 +302,7 @@ class CreateCheckoutSessionView(APIView):
                         "quantity": 1,
                     }
                 ],
-                customer_email=request.user.email,
+                # customer_email=request.user.email,
                 # customer_email="testuser@example.com",
                 success_url="https://"
                 + os.getenv("FRONTEND_DOMAIN")
@@ -266,12 +310,13 @@ class CreateCheckoutSessionView(APIView):
                 cancel_url="https://" + os.getenv("FRONTEND_DOMAIN") + "?success=false",
             )
 
-            user_stripe_session = UserStripeSession(
-                user=request.user, checkout_session_id=checkout_session.id
-            )
+            # user_stripe_session = UserStripeSession(
+            #     user=request.user, checkout_session_id=checkout_session.id
+            # )
+            user_stripe_session.checkout_session_id = checkout_session.id
             user_stripe_session.save()
 
-            return Response({"checkout_url": checkout_session.url})
+            return Response({"subscription_status": "inactive", "checkout_url": checkout_session.url})
         except Exception as e:
             return Response({"error": str(e)}, status=400)
 
@@ -324,68 +369,20 @@ def stripe_webhook(request):
 
 
 class StripeSessionStatusView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        session_id = request.GET.get("session_id")
-        if not session_id:
-            return Response({"error": "Missing session_id"}, status=400)
-
         try:
-            session = stripe.checkout.Session.retrieve(session_id)
-            customer_email = session.get("customer_email")
-            subscription_id = session.get("subscription")
-            stripe_subscription_status = None
-
-            if subscription_id:
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                stripe_subscription_status = subscription.status
-
-                # Update subscription status if session is completed
-                if session.get(
-                    "status"
-                ) == "complete" and stripe_subscription_status in [
-                    "active",
-                    "trialing",
-                ]:
-                    try:
-                        user = User.objects.get(email=customer_email)
-                        profile, created = UserProfile.objects.get_or_create(user=user)
-                        if not profile.is_subscribed:
-                            profile.is_subscribed = True
-                            profile.save()
-                            print(
-                                f"✅ Subscription activated for {user.username} (email: {customer_email})"
-                            )
-                    except User.DoesNotExist:
-                        print(f"❌ No user found with email: {customer_email}")
-                    except Exception as e:
-                        print(
-                            f"🔥 Error updating subscription for {customer_email}: {str(e)}"
-                        )
-
-            user = User.objects.filter(email=customer_email).first()
-            is_subscribed = False
-            if user:
-                profile = UserProfile.objects.filter(user=user).first()
-                if profile:
-                    is_subscribed = profile.is_subscribed
-                else:
-                    print(f"❌ No UserProfile found for {customer_email}")
+            is_active = check_subscription(request.user)
+            if is_active:
+                return Response({"subscription_status": "active"})
             else:
-                print(f"❌ No user found for {customer_email}")
+                return Response({"subscription_status": "inactive"})
 
-            print(f"App subscription status for {customer_email}: {is_subscribed}")
-
-            return Response(
-                {
-                    "customer_email": customer_email,
-                    "subscription_status": stripe_subscription_status,
-                    "app_is_subscribed": is_subscribed,
-                }
-            )
+        except UserStripeSession.DoesNotExist:
+            return Response({"subscription_status": "inactive"})
         except Exception as e:
-            print(f"🔥 Error in StripeSessionStatusView: {str(e)}")
-            return Response({"error": str(e)}, status=400)
+            return Response({"error": str(e)}, status=500)
 
 
 class UploadImageView(APIView):

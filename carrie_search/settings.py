@@ -187,8 +187,8 @@ STATIC_URL = '/static/'
 # For production:
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
-# For local development, you may also want:
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'staticfiles')]
+# # For local development, you may also want:
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'staticfiles')]
 
 
 # Default primary key field type
