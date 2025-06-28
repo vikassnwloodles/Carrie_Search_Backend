@@ -1,9 +1,10 @@
 from rest_framework import serializers
-from .models import SearchQuery
-from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
+
+from .models import SearchQuery, UserProfile
 
 
 
@@ -14,35 +15,14 @@ class SearchQuerySerializer(serializers.ModelSerializer):
 
 
 
-from django.contrib.auth.models import User
-from rest_framework import serializers
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
-
-class RegisterSerializer(serializers.Serializer):
-    username = serializers.CharField(required=True)
-    email = serializers.EmailField(required=True)
+class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True)
+    email = serializers.CharField(required=True)
+    username = serializers.CharField(required=True)
 
-    # Extended profile fields
-    first_name = serializers.CharField(required=False, allow_blank=True)
-    last_name = serializers.CharField(required=False, allow_blank=True)
-    date_of_birth = serializers.DateField(required=False)
-    gender = serializers.CharField(required=False, allow_blank=True)
-    preferred_pronouns = serializers.CharField(required=False, allow_blank=True)
-    mobile_phone_number = serializers.CharField(required=False, allow_blank=True)
-    home_address = serializers.CharField(required=False, allow_blank=True)
-
-    race_ethnicity = serializers.CharField(required=False, allow_blank=True)
-    household_income_range = serializers.CharField(required=False, allow_blank=True)
-    marital_status = serializers.CharField(required=False, allow_blank=True)
-    number_of_people_in_household = serializers.IntegerField(required=False)
-    is_employed = serializers.BooleanField(required=False)
-    is_student = serializers.BooleanField(required=False)
-    has_computer_or_internet = serializers.BooleanField(required=False)
-
-    agreed_to_terms = serializers.BooleanField(required=False)
-    consent_to_communications = serializers.BooleanField(required=False)
+    class Meta:
+        model = UserProfile
+        exclude = ['user']
 
     def validate_username(self, value):
         try:
@@ -57,6 +37,19 @@ class RegisterSerializer(serializers.Serializer):
     def validate_password(self, value):
         try:
             validate_password(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+    
+    def validate_email(self, value):
+        try:
+            validate_email(value)
+            user = User.objects.filter(email__iexact=value).order_by("-id").first()
+            if user:
+                userprofile = UserProfile.objects.filter(user=user).order_by("-id").first()
+                if userprofile:
+                    if userprofile.is_verified == True:
+                        raise serializers.ValidationError("This email is already taken.")
         except DjangoValidationError as e:
             raise serializers.ValidationError(e.messages)
         return value

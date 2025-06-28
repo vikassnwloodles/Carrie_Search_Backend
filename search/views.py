@@ -10,19 +10,25 @@ from django.shortcuts import redirect
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.auth.tokens import default_token_generator
-from django.urls import reverse
-from django.core.mail import send_mail
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.conf import settings
-from .models import UserProfile
 from django.utils.encoding import force_str  # force_text is deprecated
 from rest_framework.permissions import IsAuthenticated
-from .services.perplexity import call_perplexity_model
 from rest_framework.generics import ListAPIView
-from .serializers import SearchQuerySerializer
 from rest_framework.parsers import MultiPartParser
 from PyPDF2 import PdfReader
 from docx import Document
-from .utils import image_to_data_uri, send_verification_email
+
+from .models import UserProfile, SearchQuery
+from .serializers import SearchQuerySerializer
+from .services.perplexity import call_perplexity_model
+from .utils import (
+    image_to_data_uri,
+    send_verification_email,
+    send_password_reset_email,
+    get_best_model,
+)
 
 
 FRONTEND_BASE_URL = settings.FRONTEND_BASE_URL
@@ -40,25 +46,13 @@ class RegisterView(APIView):
         if serializer.is_valid():
             user = serializer.save()
 
-            # # Create UserProfile
-            # UserProfile.objects.create(user=user)
-
-            # Send verification email with frontend redirect link
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
 
-            # FRONTEND VERIFICATION LINK
-            # Replace with your actual frontend domain
             backend_base_url = f"{BACKEND_BASE_URL}/verify-email"
             verification_url = f"{backend_base_url}/{uid}/{token}/"
 
-            # send_mail(
-            #     subject="Verify your email",
-            #     message=f"Click to verify your email: {verification_url}",
-            #     from_email=settings.DEFAULT_FROM_EMAIL,
-            #     recipient_list=[user.email],
-            # )
-            send_verification_email(request, user, verification_url)
+            send_verification_email(user, verification_url)
 
             return Response(
                 {"message": "User created. Check your email to verify."}, status=201
@@ -95,19 +89,11 @@ class RequestPasswordResetView(APIView):
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
 
-            reset_link = request.build_absolute_uri(
-                reverse(
-                    "password-reset-confirm", kwargs={"uidb64": uid, "token": token}
-                )
+            reset_link = (
+                f"{FRONTEND_BASE_URL}/reset-password/?uidb64={uid}&token={token}"
             )
 
-            send_mail(
-                subject="Reset your password",
-                message=f"Click the link below to reset your password:\n{reset_link}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
+            send_password_reset_email(user, reset_link)
 
             return Response(
                 {"message": "Password reset link sent to your email"}, status=200
@@ -130,13 +116,18 @@ class PasswordResetConfirmView(APIView):
         if not default_token_generator.check_token(user, token):
             return Response({"error": "Invalid or expired token"}, status=400)
 
-        new_password = request.data.get("new_password")
+        try:
+            new_password = validate_password(request.data.get("new_password"))
+        except DjangoValidationError as e:
+            return Response({"error": e.messages}, status=400)
+
         if not new_password:
             return Response({"error": "New password is required"}, status=400)
 
         user.set_password(new_password)
         user.save()
-        return Response({"message": "Password has been reset successfully"}, status=200)
+        # return Response({"message": "Password has been reset successfully"}, status=200)
+        return redirect(f"{FRONTEND_BASE_URL}/?reset-password-status=success")
 
 
 class LoginView(APIView):
@@ -170,12 +161,6 @@ class LogoutView(APIView):
             return Response(status=205)
         except Exception as e:
             return Response(status=400)
-
-
-# storing the promtpt & response & counting the number of prompts<25
-# perplexity's part starts here
-def get_best_model(model):
-    return "sonar-pro" if model == "best" else model
 
 
 class SearchView(APIView):
