@@ -116,17 +116,18 @@ class PasswordResetConfirmView(APIView):
         if not default_token_generator.check_token(user, token):
             return Response({"error": "Invalid or expired token"}, status=400)
 
+        new_password = request.data.get("new_password")
+        if not new_password:
+            return Response({"error": "New password is required"}, status=400)
+        
         try:
-            new_password = validate_password(request.data.get("new_password"))
+            validate_password(new_password)
         except DjangoValidationError as e:
             return Response({"error": e.messages}, status=400)
 
-        if not new_password:
-            return Response({"error": "New password is required"}, status=400)
-
         user.set_password(new_password)
         user.save()
-        # return Response({"message": "Password has been reset successfully"}, status=200)
+
         return redirect(f"{FRONTEND_BASE_URL}/?reset-password-status=success")
 
 
