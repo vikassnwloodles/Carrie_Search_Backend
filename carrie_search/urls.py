@@ -18,14 +18,14 @@ from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
 from django.urls import path, include
-from search.views import stripe_webhook, test_ui_view, VerifyEmailView
+from search.views import test_ui_view, VerifyEmailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('search.urls')),
-    path("webhook/stripe/", stripe_webhook, name="stripe-webhook"),
     path("", test_ui_view, name="test-ui"),
-    path('verify-email/<uidb64>/<token>/', VerifyEmailView.as_view(), name='verify-email')
+    path('verify-email/<uidb64>/<token>/', VerifyEmailView.as_view(), name='verify-email'),
+    path('api/subscriptions/', include('subscriptions.urls')),
 ]
 
 

@@ -18,19 +18,15 @@ from django.utils.encoding import force_str  # force_text is deprecated
 from rest_framework.permissions import IsAuthenticated
 from .services.perplexity import call_perplexity_model
 from rest_framework.generics import ListAPIView
-from .models import SearchQuery, UserStripeSession
 from .serializers import SearchQuerySerializer
-import stripe
 from rest_framework.parsers import MultiPartParser
 from PyPDF2 import PdfReader
 from docx import Document
 from .utils import image_to_data_uri, send_verification_email
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse
 
 
-FRONTEND_DOMAIN = os.getenv("FRONTEND_DOMAIN")
-BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL")
+FRONTEND_BASE_URL = settings.FRONTEND_BASE_URL
+BACKEND_BASE_URL = settings.BACKEND_BASE_URL
 
 
 def test_ui_view(request):
@@ -77,15 +73,15 @@ class VerifyEmailView(APIView):
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
         except (User.DoesNotExist, ValueError, TypeError, OverflowError):
-            return redirect(f"https://{FRONTEND_DOMAIN}/?status=invalid")
+            return redirect(f"{FRONTEND_BASE_URL}/?status=invalid")
 
         if default_token_generator.check_token(user, token):
             profile = UserProfile.objects.get(user=user)
             profile.is_verified = True
             profile.save()
-            return redirect(f"https://{FRONTEND_DOMAIN}/?status=success")
+            return redirect(f"{FRONTEND_BASE_URL}/?status=success")
 
-        return redirect(f"https://{FRONTEND_DOMAIN}/?status=expired")
+        return redirect(f"{FRONTEND_BASE_URL}/?status=expired")
 
 
 class RequestPasswordResetView(APIView):
@@ -238,152 +234,6 @@ class LibraryView(ListAPIView):
         return SearchQuery.objects.filter(user=self.request.user).order_by(
             "-created_at"
         )[:10]
-
-
-# pricing views
-
-stripe.api_key = settings.STRIPE_SECRET_KEY
-
-
-def check_subscription(user):
-    try:
-        user_stripe = UserStripeSession.objects.get(user=user)
-        customer_id = user_stripe.stripe_customer_id
-
-        # Fetch subscriptions
-        subscriptions = stripe.Subscription.list(customer=customer_id, status='all', limit=1)
-
-        if subscriptions.data:
-            subscription = subscriptions.data[0]
-            is_active = subscription.status in ['active', 'trialing']
-            return is_active
-        else:
-            return False
-    except UserStripeSession.DoesNotExist:
-        return False
-
-
-class CreateCheckoutSessionView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        try:
-            user = request.user
-
-            # Fix for multiple UserStripeSession rows per user
-            existing_session = UserStripeSession.objects.filter(user=user).first()
-
-            # [TODO] ALREADY SUBSCRIBED
-            is_active = check_subscription(user)
-            if is_active:
-                return Response({"subscription_status": "active", "checkout_url": None})
-
-            if not existing_session:
-                # Create a new Stripe customer and session entry
-                customer = stripe.Customer.create(email=user.email)
-                user_stripe_session = UserStripeSession.objects.create(
-                    user=user,
-                    checkout_session_id="",  # will update after session creation
-                )
-                user_stripe_session.stripe_customer_id = customer.id
-                user_stripe_session.save()
-            else:
-                # Retrieve customer using existing stripe_customer_id
-                customer = stripe.Customer.retrieve(existing_session.stripe_customer_id)
-                user_stripe_session = existing_session
-
-
-            checkout_session = stripe.checkout.Session.create(
-                customer=customer.id,
-                payment_method_types=["card"],
-                mode="subscription",
-                line_items=[
-                    {
-                        "price": settings.STRIPE_PRICE_ID,
-                        "quantity": 1,
-                    }
-                ],
-                # customer_email=request.user.email,
-                # customer_email="testuser@example.com",
-                success_url="https://"
-                + os.getenv("FRONTEND_DOMAIN")
-                + "?success=true&session_id={CHECKOUT_SESSION_ID}",
-                cancel_url="https://" + os.getenv("FRONTEND_DOMAIN") + "?success=false",
-            )
-
-            # user_stripe_session = UserStripeSession(
-            #     user=request.user, checkout_session_id=checkout_session.id
-            # )
-            user_stripe_session.checkout_session_id = checkout_session.id
-            user_stripe_session.save()
-
-            return Response({"subscription_status": "inactive", "checkout_url": checkout_session.url})
-        except Exception as e:
-            return Response({"error": str(e)}, status=400)
-
-
-stripe.api_key = settings.STRIPE_SECRET_KEY
-endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
-
-@csrf_exempt
-def stripe_webhook(request):
-    print("🔔 Stripe webhook hit")
-
-    payload = request.body
-    sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-
-    if sig_header is None:
-        print("❌ No Stripe signature header.")
-        return HttpResponse(status=400)
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
-        )
-    except ValueError as e:
-        print("❌ Invalid payload:", e)
-        return HttpResponse(status=400)
-    except stripe.error.SignatureVerificationError as e:
-        print("❌ Signature verification failed:", e)
-        return HttpResponse(status=400)
-
-    print(f"✅ Event type: {event['type']}")
-
-    if event["type"] == "checkout.session.completed":
-        session = event["data"]["object"]
-        customer_email = session.get("customer_email")
-        print(f"✅ Checkout session completed for {customer_email}")
-
-        try:
-            user = User.objects.get(email=customer_email)
-            profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.is_subscribed = True
-            profile.save()
-            print(f"✅ Subscription activated for {user.username}")
-        except User.DoesNotExist:
-            print("❌ No user found with that email.")
-        except Exception as e:
-            print(f"🔥 Error updating user subscription: {str(e)}")
-
-    return HttpResponse(status=200)
-
-
-class StripeSessionStatusView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        try:
-            is_active = check_subscription(request.user)
-            if is_active:
-                return Response({"subscription_status": "active"})
-            else:
-                return Response({"subscription_status": "inactive"})
-
-        except UserStripeSession.DoesNotExist:
-            return Response({"subscription_status": "inactive"})
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
 
 
 class UploadImageView(APIView):

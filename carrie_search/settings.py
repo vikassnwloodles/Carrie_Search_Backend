@@ -32,30 +32,22 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 
 # EMAIL CONFIG
-if ENV == "dev":
-    EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-    EMAIL_HOST = os.getenv("EMAIL_HOST")
-    EMAIL_PORT = os.getenv("EMAIL_PORT")
-    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
-    EMAIL_USE_TLS = True
-else:
-    EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
-    EMAIL_HOST = os.getenv("EMAIL_HOST")
-    EMAIL_PORT = os.getenv("EMAIL_PORT")
-    EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-    EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-    DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
-    EMAIL_USE_TLS = True
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND")
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = os.getenv("EMAIL_PORT")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+EMAIL_USE_TLS = True
 
 
 # STRIPE CONFIG
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PRICE_ID = os.getenv("STRIPE_PRICE_ID")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-ALLOWED_HOSTS=[host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",")]
 
+ALLOWED_HOSTS=[host.strip() for host in os.getenv("ALLOWED_HOSTS", "").split(",")]
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL")
+BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL")
 
 from datetime import timedelta
 
@@ -83,6 +75,7 @@ INSTALLED_APPS = [
     'corsheaders',
      'rest_framework',
     'search',
+    'subscriptions',
     'rest_framework_simplejwt.token_blacklist',
     'django.contrib.admin',
     'django.contrib.auth',

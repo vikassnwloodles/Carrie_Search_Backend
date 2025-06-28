@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *.class
 *.sqlite3
-*.env
+*.env*
 *.venv
 env/
 venv/
