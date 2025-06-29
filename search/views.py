@@ -67,15 +67,15 @@ class VerifyEmailView(APIView):
             uid = urlsafe_base64_decode(uidb64).decode()
             user = User.objects.get(pk=uid)
         except (User.DoesNotExist, ValueError, TypeError, OverflowError):
-            return redirect(f"{FRONTEND_BASE_URL}/?status=invalid")
+            return redirect(f"{FRONTEND_BASE_URL}?status=invalid")
 
         if default_token_generator.check_token(user, token):
             profile = UserProfile.objects.get(user=user)
             profile.is_verified = True
             profile.save()
-            return redirect(f"{FRONTEND_BASE_URL}/?status=success")
+            return redirect(f"{FRONTEND_BASE_URL}?status=success")
 
-        return redirect(f"{FRONTEND_BASE_URL}/?status=expired")
+        return redirect(f"{FRONTEND_BASE_URL}?status=expired")
 
 
 class RequestPasswordResetView(APIView):
@@ -90,7 +90,7 @@ class RequestPasswordResetView(APIView):
             token = default_token_generator.make_token(user)
 
             reset_link = (
-                f"{FRONTEND_BASE_URL}/reset-password/?uidb64={uid}&token={token}"
+                f"{FRONTEND_BASE_URL}/reset-password?uidb64={uid}&token={token}"
             )
 
             send_password_reset_email(user, reset_link)
@@ -128,7 +128,7 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
 
-        return redirect(f"{FRONTEND_BASE_URL}/?reset-password-status=success")
+        return redirect(f"{FRONTEND_BASE_URL}?reset-password-status=success")
 
 
 class LoginView(APIView):

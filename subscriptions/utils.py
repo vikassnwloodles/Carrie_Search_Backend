@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 
 
 def check_subscription(user_stripe):
-    is_active = False
+    subscription_status = "inactive"
+    next_renewal_time = None
+    cancel_at = None
 
     if user_stripe:
         customer_id = user_stripe.stripe_customer_id
@@ -14,8 +16,14 @@ def check_subscription(user_stripe):
         if subscriptions.data:
             subscription = subscriptions.data[0]
             is_active = subscription.status in ['active', 'trialing']
+            if is_active:
+                subscription_status = "active"
+                if subscription.cancel_at_period_end == True:
+                    cancel_at = timestamp2utc(subscription.cancel_at)
+                else:
+                    next_renewal_time = timestamp2utc(subscription["items"].data[0].current_period_end)
     
-    return is_active
+    return subscription_status, next_renewal_time, cancel_at
 
 
 def timestamp2utc(timestamp):
