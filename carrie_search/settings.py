@@ -213,4 +213,6 @@ SIMPLE_JWT = {
     'TOKEN_BLACKLIST_ENABLED': True,
 }
 
-CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for now (for testing only)
+
+CORS_ALLOWED_ORIGINS = [host.strip() for host in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")]
+CSRF_TRUSTED_ORIGINS = [host.strip() for host in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")]
