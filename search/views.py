@@ -176,7 +176,8 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
 
-        return redirect(f"{FRONTEND_BASE_URL}?reset-password-status=success")
+        # return redirect(f"{FRONTEND_BASE_URL}?reset-password-status=success")
+        return Response({"reset-password-status": "success"})
 
 
 class LoginView(APIView):
