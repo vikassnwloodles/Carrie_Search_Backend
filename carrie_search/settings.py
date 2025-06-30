@@ -214,5 +214,9 @@ SIMPLE_JWT = {
 }
 
 
-CORS_ALLOWED_ORIGINS = [host.strip() for host in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")]
-CSRF_TRUSTED_ORIGINS = [host.strip() for host in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")]
+raw_cors_origins = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+CORS_ALLOWED_ORIGINS = [host.strip() for host in raw_cors_origins.split(",") if host.strip()]
+
+raw_csrf_origins = os.getenv("CSRF_TRUSTED_ORIGINS", "").strip()
+CSRF_TRUSTED_ORIGINS = [host.strip() for host in raw_csrf_origins.split(",") if host.strip()]
+
