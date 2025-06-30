@@ -30,9 +30,9 @@ class UserProfile(models.Model):
     # Account & Access
     username = models.CharField(max_length=150, null=True, blank=True)
 
-    # # Consent
-    # agreed_to_terms = models.BooleanField(null=True, blank=True)
-    # consent_to_communications = models.BooleanField(null=True, blank=True)
+    # Consent
+    agreed_to_terms = models.BooleanField(null=True, blank=True)
+    consent_to_communications = models.BooleanField(null=True, blank=True)
 
     # Demographic Information
     race_ethnicity = models.CharField(max_length=100, null=True, blank=True)

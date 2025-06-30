@@ -17,11 +17,16 @@ from django.utils.encoding import force_str  # force_text is deprecated
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
 from rest_framework.parsers import MultiPartParser
+from rest_framework import status
 from PyPDF2 import PdfReader
 from docx import Document
 
 from .models import UserProfile, SearchQuery
-from .serializers import SearchQuerySerializer
+from .serializers import (
+    SearchQuerySerializer,
+    UserProfileSerializer,
+    ChangePasswordSerializer,
+)
 from .services.perplexity import call_perplexity_model
 from .utils import (
     image_to_data_uri,
@@ -61,6 +66,49 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=400)
 
 
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        user = request.user
+
+        if serializer.is_valid():
+            if not user.check_password(serializer.validated_data["current_password"]):
+                return Response(
+                    {"current_password": ["Incorrect current password."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            user.set_password(serializer.validated_data["new_password"])
+            user.save()
+            return Response(
+                {"detail": "Password changed successfully."}, status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user.userprofile)
+        return Response(serializer.data)
+
+
+class UserProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        profile = UserProfile.objects.get(user=request.user)
+        serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class VerifyEmailView(APIView):
     def get(self, request, uidb64, token):
         try:
@@ -90,7 +138,7 @@ class RequestPasswordResetView(APIView):
             token = default_token_generator.make_token(user)
 
             reset_link = (
-                f"{FRONTEND_BASE_URL}/reset-password?uidb64={uid}&token={token}"
+                f"{FRONTEND_BASE_URL}?event=reset-password&uidb64={uid}&token={token}"
             )
 
             send_password_reset_email(user, reset_link)
@@ -119,7 +167,7 @@ class PasswordResetConfirmView(APIView):
         new_password = request.data.get("new_password")
         if not new_password:
             return Response({"error": "New password is required"}, status=400)
-        
+
         try:
             validate_password(new_password)
         except DjangoValidationError as e:
