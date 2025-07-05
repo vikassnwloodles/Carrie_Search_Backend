@@ -176,7 +176,6 @@ class PasswordResetConfirmView(APIView):
         user.set_password(new_password)
         user.save()
 
-        # return redirect(f"{FRONTEND_BASE_URL}?reset-password-status=success")
         return Response({"reset-password-status": "success"})
 
 
@@ -219,7 +218,7 @@ class SearchView(APIView):
     def post(self, request):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
-        model = request.data.get("model", "sonar-pro")
+        model = request.data.get("model", "sonar")
         return_images = request.data.get("return_images", False)
         search_mode = request.data.get("search_mode", "web")
         deep_research = request.data.get("deep_research", False)
