@@ -27,7 +27,7 @@ def call_perplexity_model(
     if prompt:
         content_parts.append({"type": "text", "text": prompt})
 
-    if image_url:
+    if image_url and image_url != "undefined":
         content_parts.append({"type": "image_url", "image_url": {"url": image_url}})
 
     extra_kwargs = dict()
