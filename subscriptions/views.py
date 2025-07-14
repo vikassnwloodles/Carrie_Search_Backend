@@ -192,7 +192,7 @@ def create_stripe_portal_session(request):
     )
 
     if user_stripe_session is None:
-        return Response({'error': f'No stripe session record found for {user.username}!'}, status=400)
+        return Response({'error': f'No stripe session record found!'}, status=400)
     
     customer_id = user_stripe_session.stripe_customer_id
 
