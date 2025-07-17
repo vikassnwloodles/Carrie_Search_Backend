@@ -180,9 +180,6 @@ STATIC_URL = '/static/'
 # For production:
 STATIC_ROOT = os.path.join(BASE_DIR, 'static/')
 
-# For local development, you may also want:
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'staticfiles')]
-
 
 # MEDIA CONFIG
 MEDIA_URL = '/media/'
