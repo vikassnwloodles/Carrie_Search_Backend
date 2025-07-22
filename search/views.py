@@ -20,6 +20,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework import status
 from PyPDF2 import PdfReader
 from docx import Document
+from .ML.intent_model import classify_intent, map_intent_to_model
 
 from .models import UserProfile, SearchQuery
 from .serializers import (
@@ -218,14 +219,20 @@ class SearchView(APIView):
     def post(self, request):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
-        model = request.data.get("model", "sonar")
+        # model = request.data.get("model", "sonar")
         return_images = request.data.get("return_images", False)
         search_mode = request.data.get("search_mode", "web")
         deep_research = request.data.get("deep_research", False)
         pro = request.data.get("pro", True)
         labs = request.data.get("labs", False)
 
-        model = get_best_model(model)
+        # model = get_best_model(model)
+
+        if prompt:
+            intent, confidence = classify_intent(prompt)
+            model = map_intent_to_model(intent)
+        else:
+            model = "sonar-pro"
 
         if not prompt and not image_url:
             return Response({"error": "Prompt or image is required."}, status=400)
