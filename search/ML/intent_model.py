@@ -11,6 +11,9 @@ clf = joblib.load(os.path.join(BASE_DIR, "intent_classifier.pkl"))
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def classify_intent(query, threshold=0.6):
+    keywords = ["email"]  # keep adding new keywords as needed
+    for keyword in keywords:
+        if keyword in query.lower(): return "creative", 1
     embedding = embedding_model.encode([query])
     probs = clf.predict_proba(embedding)[0]
     label = clf.classes_[np.argmax(probs)]
