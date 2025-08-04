@@ -23,7 +23,7 @@ def classify_intent(query, threshold=0.6):
 def map_intent_to_model(intent: str) -> str:
     intent_model_map = {
         "factual": "sonar-pro",
-        "deep-research": "sonar-deep-research",
+        "deep-research": "sonar-pro",
         "reasoning": "sonar-reasoning-pro",
         "creative": "r1-1776",
         "unsure": "sonar-pro"
