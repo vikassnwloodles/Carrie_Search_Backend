@@ -28,7 +28,7 @@ from .serializers import (
     UserProfileSerializer,
     ChangePasswordSerializer,
 )
-from .services.perplexity import call_perplexity_model
+from .services.perplexity import call_perplexity_model, call_groq_model
 from .utils import (
     image_to_data_uri,
     send_verification_email,
@@ -248,7 +248,16 @@ class SearchView(APIView):
                     status=402,
                 )
 
-        result = call_perplexity_model(
+        # result = call_perplexity_model(
+        #     prompt=prompt,
+        #     image_url=image_url,
+        #     model=model,
+        #     return_images=return_images,
+        #     search_mode=search_mode,
+        #     deep_research=deep_research,
+        # )
+
+        result = call_groq_model(
             prompt=prompt,
             image_url=image_url,
             model=model,
