@@ -1,25 +1,28 @@
 import os
+import pandas as pd
+from PyPDF2 import PdfReader
+from docx import Document
+from pptx import Presentation
+
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth.models import User
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
-from django.shortcuts import render
-from .serializers import RegisterSerializer
-from django.shortcuts import redirect
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import default_token_generator
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.conf import settings
-from django.utils.encoding import force_str  # force_text is deprecated
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
 from rest_framework.parsers import MultiPartParser
-from rest_framework import status
-from PyPDF2 import PdfReader
-from docx import Document
+
+from django.conf import settings
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.password_validation import validate_password
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.core.exceptions import ValidationError as DjangoValidationError
+
+from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import RegisterSerializer
 from .ML.intent_model import classify_intent, map_intent_to_model
 
 from .models import UserProfile, SearchQuery
@@ -315,6 +318,27 @@ class UploadDocExtractView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
+    # def extract_text(self, file):
+    #     if file.name.endswith(".txt"):
+    #         return file.read().decode("utf-8")
+
+    #     elif file.name.endswith(".pdf"):
+    #         reader = PdfReader(file)
+    #         text = "\n".join(
+    #             [page.extract_text() for page in reader.pages if page.extract_text()]
+    #         )
+    #         return text.strip()
+
+    #     elif file.name.endswith(".docx"):
+    #         doc = Document(file)
+    #         return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+
+    #     else:
+    #         raise ValueError(
+    #             "Unsupported file format. Please upload a .txt, .pdf, or .docx file."
+    #         )
+
+
     def extract_text(self, file):
         if file.name.endswith(".txt"):
             return file.read().decode("utf-8")
@@ -330,7 +354,40 @@ class UploadDocExtractView(APIView):
             doc = Document(file)
             return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
 
+        elif file.name.endswith(".csv"):
+            df = pd.read_csv(file)
+            return df.to_markdown(index=False)
+
+        elif file.name.endswith(".xlsx"):
+            # Read all sheets
+            excel_file = pd.read_excel(file, sheet_name=None)
+            extracted = []
+            for sheet_name, df in excel_file.items():
+                extracted.append(f"🧾 **Sheet: {sheet_name}**\n")
+                extracted.append(df.to_markdown(index=False))
+                extracted.append("\n")
+            return "\n".join(extracted)
+
+        elif file.name.endswith(".pptx"):
+            prs = Presentation(file)
+            extracted = []
+            for i, slide in enumerate(prs.slides, start=1):
+                slide_text = []
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        slide_text.append(shape.text.strip())
+                notes = ""
+                if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+                    notes = slide.notes_slide.notes_text_frame.text.strip()
+                extracted.append(f"🖼️ Slide {i}")
+                if slide_text:
+                    extracted.append("Content: " + " | ".join(slide_text))
+                if notes:
+                    extracted.append("Speaker Notes: " + notes)
+                extracted.append("\n")
+            return "\n".join(extracted).strip()
+
         else:
             raise ValueError(
-                "Unsupported file format. Please upload a .txt, .pdf, or .docx file."
+                "Unsupported file format. Please upload a .txt, .pdf, .docx, .csv, .xlsx, or .pptx file."
             )
