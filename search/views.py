@@ -32,6 +32,7 @@ from .serializers import (
     ChangePasswordSerializer,
 )
 from .services.perplexity import call_perplexity_model, call_groq_model
+from .services.chat_context import build_chat_context
 from .utils import (
     image_to_data_uri,
     send_verification_email,
@@ -223,7 +224,8 @@ class SearchView(APIView):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
         # model = request.data.get("model", "sonar")
-        return_images = request.data.get("return_images", False)
+        # return_images = request.data.get("return_images", False)
+        return_images = False
         search_mode = request.data.get("search_mode", "web")
         deep_research = request.data.get("deep_research", False)
         pro = request.data.get("pro", True)
@@ -234,6 +236,10 @@ class SearchView(APIView):
         if prompt:
             intent, confidence = classify_intent(prompt)
             model = map_intent_to_model(intent)
+
+            # BUILD PROMPT WITH PREVIOUS MESSSAGES (CHAT HISTORY) FOR PROVIDING CONTEXT TO THE MODEL
+            final_prompt = build_chat_context(request.user, prompt)
+
         else:
             model = "sonar-pro"
 
@@ -251,7 +257,16 @@ class SearchView(APIView):
                     status=402,
                 )
 
-        # result = call_perplexity_model(
+        result = call_perplexity_model(
+            prompt=final_prompt,
+            image_url=image_url,
+            model=model,
+            return_images=return_images,
+            search_mode=search_mode,
+            deep_research=deep_research,
+        )
+
+        # result = call_groq_model(
         #     prompt=prompt,
         #     image_url=image_url,
         #     model=model,
@@ -259,15 +274,6 @@ class SearchView(APIView):
         #     search_mode=search_mode,
         #     deep_research=deep_research,
         # )
-
-        result = call_groq_model(
-            prompt=prompt,
-            image_url=image_url,
-            model=model,
-            return_images=return_images,
-            search_mode=search_mode,
-            deep_research=deep_research,
-        )
 
         SearchQuery.objects.create(
             user=request.user, prompt=prompt or "[Image]", response=result
