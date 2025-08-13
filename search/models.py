@@ -49,3 +49,13 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"{self.user.username} Profile"
 
+
+# DEFINING FIELDS/COLUMNS FOR SHARED CHAT TABLE
+class SharedChat(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="shared_chats")
+    prompt = models.TextField()
+    response = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Shared by {self.user.username} at {self.created_at}"

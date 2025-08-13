@@ -2,7 +2,7 @@ from search.models import SearchQuery
 import tiktoken
 
 
-CONTEXT_LIMIT = 200_000
+CONTEXT_LIMIT = 128_000
 RESERVED_OUTPUT = int(CONTEXT_LIMIT * 0.20)  # 20% of context limit
 SAFETY_BUFFER = int(CONTEXT_LIMIT * 0.01)    # 1% of context limit
 MAX_INPUT_TOKENS = CONTEXT_LIMIT - RESERVED_OUTPUT - SAFETY_BUFFER

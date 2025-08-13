@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import ListAPIView
 from rest_framework.parsers import MultiPartParser
+from rest_framework.decorators import api_view, permission_classes
 
 from django.conf import settings
 from django.shortcuts import render, redirect
@@ -25,7 +26,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import RegisterSerializer
 from .ML.intent_model import classify_intent, map_intent_to_model
 
-from .models import UserProfile, SearchQuery
+from .models import UserProfile, SearchQuery, SharedChat
 from .serializers import (
     SearchQuerySerializer,
     UserProfileSerializer,
@@ -397,3 +398,51 @@ class UploadDocExtractView(APIView):
             raise ValueError(
                 "Unsupported file format. Please upload a .txt, .pdf, .docx, .csv, .xlsx, or .pptx file."
             )
+
+
+@api_view(['POST'])  # better as POST since you’re creating
+@permission_classes([IsAuthenticated])
+def make_chat_public(request):
+    search_result_id = request.data.get('search-result-id')
+    if not search_result_id:
+        return Response({"error": "search-result-id parameter is required"}, status=400)
+
+    # Check if it already exists in SharedChat
+    existing_chat = SharedChat.objects.filter(response__id=search_result_id).first()
+    if existing_chat:
+        return Response({"message": "Already shared", "shared_chat_id": existing_chat.id}, status=200)
+
+    try:
+        search_query = SearchQuery.objects.filter(response__id=search_result_id).first()
+        if not search_query:
+            return Response({"error": "SearchQuery not found"}, status=404)
+
+        # Copy common fields
+        data = {
+            f.name: getattr(search_query, f.name)
+            for f in SharedChat._meta.fields
+            if f.name not in ['id', 'created_at']
+        }
+
+        shared_chat = SharedChat.objects.create(**data)
+        return Response({"message": "Shared successfully", "shared_chat_id": shared_chat.id})
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+
+class PublicChatRetrieveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, shared_chat_id):
+        try:
+            public_chat_data = SharedChat.objects.filter(
+                id=shared_chat_id
+            ).values().first()
+
+            if not public_chat_data:
+                return Response({"error": "Chat not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            return Response(public_chat_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

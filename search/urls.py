@@ -11,10 +11,14 @@ from .views import (
     RequestPasswordResetView,
     UserProfileView,
     UserProfileUpdateView,
-    ChangePasswordView
+    ChangePasswordView,
+    PublicChatRetrieveView,
+    make_chat_public
 )
 
 urlpatterns = [
+    path("make-chat-public/", make_chat_public, name="make-chat-public"),
+    path("public-chat/<str:shared_chat_id>/", PublicChatRetrieveView.as_view(), name="public-chat-retrieve"),
     path("signup/", RegisterView.as_view(), name="signup"),
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
