@@ -240,7 +240,7 @@ class SearchView(APIView):
             model = map_intent_to_model(intent)
 
             # BUILD PROMPT WITH PREVIOUS MESSSAGES (CHAT HISTORY) FOR PROVIDING CONTEXT TO THE MODEL
-            chat_context = build_chat_context(request.user, prompt)
+            chat_context = build_chat_context(request.user, prompt, search_result_id)
 
         else:
             model = "sonar-pro"

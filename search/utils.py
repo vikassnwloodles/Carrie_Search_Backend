@@ -63,7 +63,7 @@ def scrape_metadata(search_result):
     url = search_result["url"]
     try:
         scraper = cloudscraper.create_scraper()
-        res = scraper.get(url)
+        res = scraper.get(url, timeout=(3, 5))
         soup = BeautifulSoup(res.text, "html.parser")
 
         # --- site_name ---
