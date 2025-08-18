@@ -5,6 +5,10 @@ from django.core.files.uploadedfile import UploadedFile
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
+import cloudscraper
+import tldextract
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 
 
 def get_best_model(model):
@@ -52,3 +56,46 @@ def send_password_reset_email(user, reset_link):
     msg = EmailMultiAlternatives(subject, text_content, from_email, [to_email])
     msg.attach_alternative(html_content, "text/html")
     msg.send()
+
+
+def scrape_metadata(search_result):
+    data = {}
+    url = search_result["url"]
+    try:
+        scraper = cloudscraper.create_scraper()
+        res = scraper.get(url)
+        soup = BeautifulSoup(res.text, "html.parser")
+
+        # --- site_name ---
+        site_name = soup.find("meta", property="og:site_name")
+        if site_name:
+            data["site_name"] = site_name.get("content", "").strip()
+
+        # --- icon ---
+        icon_link = soup.find("link", rel=lambda x: x and "icon" in x.lower())
+        if icon_link and icon_link.get("href"):
+            data["icon"] = urljoin(url, icon_link["href"])
+
+        # --- description ---
+        desc = soup.find("meta", attrs={"name": "description"})
+        if desc and desc.get("content"):
+            data["description"] = desc["content"].strip()
+        else:
+            og_desc = soup.find("meta", property="og:description")
+            data["description"] = og_desc.get("content", "").strip() if og_desc else ""
+
+    except Exception as e:
+        pass
+
+    if "site_name" not in data: data["site_name"] = urlparse(url).netloc
+    if "icon" not in data: data["icon"] = ""
+
+    # --- short domain ---
+    ext = tldextract.extract(url)
+    short_name = ext.domain
+    data["domain_short"] = short_name
+
+    data["site_url"] = url
+    data["title"] = search_result["title"]
+
+    return data

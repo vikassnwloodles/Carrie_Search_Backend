@@ -224,6 +224,7 @@ class SearchView(APIView):
     def post(self, request):
         prompt = request.data.get("prompt")
         image_url = request.data.get("image_url")
+        search_result_id = request.data.get("search_result_id")
         # model = request.data.get("model", "sonar")
         # return_images = request.data.get("return_images", False)
         return_images = False
@@ -239,7 +240,7 @@ class SearchView(APIView):
             model = map_intent_to_model(intent)
 
             # BUILD PROMPT WITH PREVIOUS MESSSAGES (CHAT HISTORY) FOR PROVIDING CONTEXT TO THE MODEL
-            final_prompt = build_chat_context(request.user, prompt)
+            chat_context = build_chat_context(request.user, prompt)
 
         else:
             model = "sonar-pro"
@@ -259,7 +260,8 @@ class SearchView(APIView):
                 )
 
         result = call_perplexity_model(
-            prompt=final_prompt,
+            prompt=prompt,
+            chat_context=chat_context,
             image_url=image_url,
             model=model,
             return_images=return_images,
@@ -276,11 +278,47 @@ class SearchView(APIView):
         #     deep_research=deep_research,
         # )
 
-        SearchQuery.objects.create(
-            user=request.user, prompt=prompt or "[Image]", response=result
-        )
+        extra_kwargs = {}
+        if "error" in result:  # HANDLE INVALID PERPLEXITY KEY ERROR
+            extra_kwargs["status"] = 502
+        else:
+            if search_result_id != "null":
+                # Update existing
+                try:
+                    search_query = SearchQuery.objects.get(pk=search_result_id)
+                    search_query.user = request.user
+                    search_query.prompt = prompt or "[Image]"
+                    search_query.response = result
+                    search_query.save()
+                except SearchQuery.DoesNotExist:
+                    # fallback: create new if id not found
+                    search_query = SearchQuery.objects.create(
+                        user=request.user,
+                        prompt=prompt or "[Image]",
+                        response=result
+                    )
+            else:
+                # Create new
+                search_query = SearchQuery.objects.create(
+                    user=request.user,
+                    prompt=prompt or "[Image]",
+                    response=result
+                )
 
-        return Response(result)
+            result["pk"] = search_query.pk
+
+            # if search_result_id:
+            #     SearchQuery.objects.filter(response__id=search_result_id).update(
+            #         user=request.user,
+            #         prompt=prompt or "[Image]",
+            #         response=result
+            #     )
+            # else:
+            #     SearchQuery.objects.create(
+            #         user=request.user, prompt=prompt or "[Image]", response=result
+            #     )
+
+        return Response(result, **extra_kwargs)
 
 
 # library functionality

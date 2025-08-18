@@ -16,15 +16,15 @@ def build_chat_context(user, current_input_prompt):
     for msg in SearchQuery.objects.filter(user=user).order_by('-created_at'):
         if total_tokens + msg.response["usage"]["total_tokens"] > MAX_INPUT_TOKENS:
             break
-        # history.insert(0, msg.response["choices"][0]["message"]["content"])  # prepend to maintain chronological order
-        history.insert(0, {"User": msg.prompt, "Assistant": msg.response["choices"][0]["message"]["content"]})  # prepend to maintain chronological order
+
+        history.insert(0, {"user": msg.prompt, "assistant": msg.response["choices"][0]["message"]["content"]})  # prepend to maintain chronological order
         total_tokens += msg.response["usage"]["total_tokens"]
 
-    parts = [f"User: {turn['User']}\nAssistant: {turn['Assistant']}" for turn in history]
-    parts.append(f"User: {current_input_prompt}\nAssistant: ")
-    final_prompt = "\n".join(parts)
+    chat_context = []
+    for turn in history:
+        chat_context.extend([{"role": "user", "content": turn["user"]}, {"role": "assistant", "content": turn["assistant"]}])  
 
-    return final_prompt
+    return chat_context
 
 
 encoding = tiktoken.encoding_for_model("gpt-4o")

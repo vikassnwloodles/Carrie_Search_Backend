@@ -1,6 +1,8 @@
 import os
+import json
 import requests
 from groq import Groq
+from search.utils import scrape_metadata
 
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -16,6 +18,7 @@ BASE_URL = "https://api.perplexity.ai"
 
 def call_perplexity_model(
     prompt=None,
+    chat_context=[],
     image_url=None,
     model="sonar-pro",
     return_images=False,
@@ -35,11 +38,15 @@ def call_perplexity_model(
     extra_kwargs = dict()
     if deep_research: extra_kwargs["reasoning_effort"] = "high"
 
+    chat_context_plus_prompt = [*chat_context, {"role": "user", "content": content_parts}]
+    json.dump(chat_context_plus_prompt, open("final_prompt.json", "w"), indent=4)
+
     data = {
         "model": model,
-        "messages": [{"role": "user", "content": content_parts}],
+        "messages": chat_context_plus_prompt,
         "return_images": return_images,
         "search_mode": search_mode,
+        "return_related_questions": True,
         **extra_kwargs
     }
 
@@ -49,7 +56,15 @@ def call_perplexity_model(
     print("Response:", response.text)
 
     if response.status_code == 200:
-        return response.json()
+        response_dict = response.json()
+        if "search_results" in response_dict:
+            citations_metadata = []
+            for search_result in response_dict["search_results"]:
+                citations_metadata.append(scrape_metadata(search_result))
+
+            response_dict["citations_metadata"] = citations_metadata
+
+        return response_dict
     else:
         return {"error": response.text, "status": response.status_code}
 
